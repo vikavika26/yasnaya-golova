@@ -319,8 +319,10 @@ export function renderDiary({ days, stats }) {
             d.mens === 1 ? 'менструация' : null,
             d.medTaken ? 'таблетка' : null,
             d.p_mean !== null ? `${mm(d.p_mean)} мм` : null,
-            d.selfTriggers?.length ? d.selfTriggers.join(', ').toLowerCase() : null,
-            d.note || null,
+            // esc обязателен: и триггеры, и заметка — свободный текст от человека,
+            // а разметка вставляется через innerHTML
+            d.selfTriggers?.length ? esc(d.selfTriggers.join(', ').toLowerCase()) : null,
+            d.note ? esc(d.note) : null,
           ].filter(Boolean).join(' · ') || '—'}</div>
         </div>
       </div>`).join('')}</div>`
