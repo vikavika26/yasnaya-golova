@@ -120,7 +120,7 @@ function bindToday() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (picked.headache === null) return toast('Отметь, болела ли голова');
+    if (picked.headache === null) return toast('Отметь сначала, болела ли голова');
     const medText = document.getElementById('med_text')?.value.trim() || null;
     await store.entries.put({
       date: todayIso(),
@@ -135,7 +135,7 @@ function bindToday() {
     });
     await recompute();
     render();
-    toast('Записала');
+    toast('Записала, спасибо ✨');
   });
 }
 
@@ -145,15 +145,15 @@ function bindDiary() {
   document.getElementById('file-migrebot')?.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    toast('Читаю файл…', 8000);
+    toast('Читаю дневник, это займёт пару секунд…', 8000);
     try {
       const res = await importMigrebotFile(file);
-      toast(`Загружено ${res.imported} дней, из них с болью ${res.headacheDays}`, 4000);
+      toast(`Перенесла ${res.imported} дней, из них с болью ${res.headacheDays}`, 4000);
       await syncWeather();
       await recompute();
       render();
     } catch (err) {
-      toast(`Не получилось: ${err.message}`, 5000);
+      toast(`Не получилось прочитать файл: ${err.message}`, 5000);
     }
   });
 }
@@ -164,7 +164,7 @@ function bindDoctor() {
   document.getElementById('btn-report')?.addEventListener('click', () => {
     const text = buildReport();
     if (navigator.share) navigator.share({ title: 'Сводка по головной боли', text }).catch(() => {});
-    else { navigator.clipboard?.writeText(text); toast('Сводка скопирована'); }
+    else { navigator.clipboard?.writeText(text); toast('Сводка скопирована — можно вставить куда угодно'); }
   });
   document.getElementById('btn-export')?.addEventListener('click', exportBackup);
 }
@@ -203,7 +203,7 @@ async function exportBackup() {
   a.download = `yasnaya-golova-${todayIso()}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
-  toast('Копия сохранена');
+  toast('Копия сохранена в загрузки');
 }
 
 /* ─── Настройки ─── */
@@ -251,15 +251,15 @@ function bindSettings() {
     try {
       const n = await store.importBackup(JSON.parse(await file.text()));
       await recompute(); render();
-      toast(`Восстановлено ${n} записей`);
+      toast(`Восстановила ${n} записей`);
     } catch (err) { toast(err.message); }
   });
 
   document.getElementById('btn-wipe')?.addEventListener('click', async () => {
-    if (!confirm('Удалить все записи и погоду? Отменить будет нельзя.')) return;
+    if (!confirm('Удалить все записи и погоду? Это нельзя отменить — сначала лучше сохранить копию.')) return;
     await store.wipe();
     await recompute(); render();
-    toast('Данные удалены');
+    toast('Всё удалено');
   });
 }
 
@@ -267,14 +267,14 @@ async function syncWeather({ force = false } = {}) {
   try {
     const s = await store.stats();
     if (!s.entries && !force) return;
-    toast('Обновляю погоду…', 6000);
+    toast('Смотрю, какая была погода…', 6000);
     const res = await weatherApi.sync({
       entriesFrom: s.from, entriesTo: s.to,
       onProgress: (m) => toast(m, 6000),
     });
-    toast(`Погода за ${res.days} дней`);
+    toast(`Погода собрана за ${res.days} дней`);
   } catch (err) {
-    toast(`Погода недоступна: ${err.message}`, 4000);
+    toast(`Погода не загрузилась: ${err.message}. Попробуй позже.`, 4000);
   }
 }
 

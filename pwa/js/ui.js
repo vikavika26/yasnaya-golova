@@ -1,4 +1,12 @@
-/** Отрисовка экранов. Чистые функции: данные на вход, разметка на выход. */
+/**
+ * Отрисовка экранов. Чистые функции: данные на вход, разметка на выход.
+ *
+ * Про язык: здесь принципиально нет статистического жаргона. Человеку с болью не
+ * нужны слова «множественные сравнения» и «бутстрап» — ему нужно понимать, почему
+ * приложение говорит «влияет» или «просто совпадение». Методика от этого не
+ * меняется, меняются только формулировки.
+ */
+import { catCalm, catAchy, catCurious, catUnsure, catSleepy, catForRisk, catForVerdict } from './cats.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -6,18 +14,20 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
 const pct = (v) => `${Math.round(v * 100)}%`;
 const fix = (v, n = 2) => (v === null || v === undefined ? '—' : v.toFixed(n));
 
+/** Статусы проверки — понятными словами вместо «подтверждён / не подтвердился». */
 const VERDICT_LABEL = {
-  confirmed: 'подтверждён',
-  protective: 'скорее защищает',
-  not_confirmed: 'не подтвердился',
-  few_data: 'мало данных',
-  no_data: 'нет данных',
+  confirmed: 'похоже, влияет',
+  protective: 'наоборот, легче',
+  not_confirmed: 'просто совпадение',
+  few_data: 'ещё мало случаев',
+  no_data: 'нечего считать',
 };
+
 const BELIEF_LABEL = {
-  supported: 'данные согласны',
-  not_supported: 'данные не согласны',
-  needs_daily: 'нужны ежедневные отметки',
-  not_measurable: 'нечем проверить',
+  supported: 'и правда влияет',
+  not_supported: 'кажется, напрасно винила',
+  needs_daily: 'нужны отметки и в хорошие дни',
+  not_measurable: 'пока не умею проверять',
 };
 
 const RU_MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
@@ -26,88 +36,145 @@ export const humanDate = (iso) => {
   return `${+d} ${RU_MONTHS[+m - 1]} ${y}`;
 };
 
+const plural = (n, one, few, many) => {
+  const m10 = Math.round(n) % 10, m100 = Math.round(n) % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+};
+
+/** Почему получился такой статус — по-человечески, без терминов. */
+function humanReason(f, tested) {
+  switch (f.verdict) {
+    case 'confirmed':
+      return 'В такие дни голова болит заметно чаще, и это не рассыпается, когда я убираю'
+        + ' случайные куски дневника. Похоже на настоящую связь.';
+    case 'protective':
+      return 'В такие дни болит реже обычного. Не значит, что это лечит — просто такие дни'
+        + ' у тебя проходят спокойнее.';
+    case 'not_confirmed': {
+      if (f.bh && f.bh.survived) {
+        return 'Разница выглядела заметной, но держится на нескольких затяжных приступах:'
+          + ' стоит их убрать — и она исчезает. Пока не поверю.';
+      }
+      const dir = f.rr >= 1 ? 'чуть чаще' : 'чуть реже';
+      return `Болит ${dir}, но такая разница легко получается сама собой. Я проверила`
+        + ` ${tested} ${plural(tested, 'версию', 'версии', 'версий')}, а при таком количестве`
+        + ' попыток одна-две всегда выглядят подозрительно — случайно.';
+    }
+    case 'few_data':
+      return `Дней, когда это совпало с болью, пока всего ${f.exposedHeadache}. Чтобы отличить`
+        + ' закономерность от совпадения, мне нужно хотя бы восемь — вернусь к этому позже.';
+    default:
+      return 'Нет данных, чтобы это посчитать.';
+  }
+}
+
+/** Числа — тоже словами, а не «RR [CI]». */
+function humanNumbers(f) {
+  if (!f.rr) return '';
+  const more = f.rr >= 1 ? 'чаще' : 'реже';
+  const times = f.rr >= 1 ? f.rr : 1 / f.rr;
+  return `болит в ${pct(f.p1)} таких дней против ${pct(f.p0)} в остальные`
+    + ` · это в ${fix(times)} раза ${more}`
+    + `<span class="muted"> (с запасом на случайность: от ${fix(f.lo)} до ${fix(f.hi)})</span>`;
+}
+
 /* ─────────────────────────── Сегодня ─────────────────────────── */
 
 export function renderToday({ today, risk, analysis, entry, weather }) {
   const prob = risk?.forecast?.find((f) => f.date === today)?.probability ?? analysis?.baseRate ?? null;
   const base = analysis?.baseRate ?? null;
-  const relative = prob !== null && base ? prob / base : null;
+  const rel = prob !== null && base ? prob / base : null;
+
   let mood = 'обычный день';
-  if (relative !== null) {
-    if (relative >= 1.4) mood = 'риск выше обычного';
-    else if (relative <= 0.7) mood = 'риск ниже обычного';
+  if (rel !== null) {
+    if (rel >= 1.4) mood = 'сегодня стоит поберечься';
+    else if (rel <= 0.75) mood = 'сегодня спокойно';
   }
   const active = risk?.forecast?.find((f) => f.date === today)?.active || [];
-  const trustworthy = risk?.backtest?.beatsBaseline;
+  const honest = risk?.backtest?.beatsBaseline === false;
 
   return `
   <section class="card hero">
+    ${catForRisk(prob, base, 104)}
     <div class="value">${prob === null ? '—' : pct(prob)}</div>
-    <div class="label">вероятность боли сегодня · ${esc(mood)}</div>
-    ${base !== null ? `<div class="sub muted small">обычный уровень для тебя — ${pct(base)} дней</div>` : ''}
+    <div class="label">${esc(mood)}</div>
+    ${base !== null ? `<div class="sub">Обычно голова болит в ${pct(base)} дней —
+      с этим и сравниваю</div>` : ''}
     ${active.length ? `<div class="chips" style="justify-content:center">${
       active.map((a) => `<span class="chip">${esc(a)}</span>`).join('')}</div>` : ''}
-    ${trustworthy === false ? `<div class="explain">Прогноз пока не точнее простого среднего — показываю его честно,
-      как ориентир. Он станет полезным, когда наберётся больше ежедневных отметок.</div>` : ''}
+    ${honest ? `<div class="explain warm">Честно: пока эта цифра угадывает не лучше, чем
+      «в среднем столько-то дней болит». Показываю как ориентир, а не как предсказание —
+      чем больше отметок, тем точнее станет.</div>` : ''}
   </section>
 
   ${weather ? `<section class="card">
-    <h2>Погода сейчас</h2>
+    <h2>${catCurious(26)} Погода за окном</h2>
     <div class="kv">
       <div class="k">Давление</div><div>${fix(weather.p_mean, 0)} гПа${
         weather.p_delta !== null && weather.p_delta !== undefined
-          ? ` (${weather.p_delta > 0 ? '+' : ''}${fix(weather.p_delta, 1)} за сутки)` : ''}</div>
+          ? ` <span class="muted">(${weather.p_delta > 0 ? '+' : ''}${fix(weather.p_delta, 1)} за сутки)</span>`
+          : ''}</div>
       <div class="k">Температура</div><div>${fix(weather.t_mean, 1)} °C</div>
       <div class="k">Влажность</div><div>${fix(weather.rh_mean, 0)} %</div>
     </div>
+    <div class="explain">Погоду беру не по ощущениям, а из открытого архива наблюдений —
+      поэтому её можно честно сравнить с днями боли. И смотрю в первую очередь не на само
+      давление, а на то, насколько оно изменилось за сутки.</div>
+    <div class="source">Источник: Open-Meteo. История — архив ERA5, это европейский
+      реанализ погоды по всему миру; свежие дни и завтрашний прогноз — оттуда же.
+      Данные открытые, скачиваются сами, аккаунт не нужен.</div>
   </section>` : ''}
 
   <section class="card">
-    <h2>Отметить день</h2>
+    <h2>${catAchy(26)} Как прошёл день</h2>
     <form id="entry-form">
-      <div class="row" style="margin-bottom:14px">
+      <div class="row" style="margin-bottom:16px">
         <div class="main"><div class="name">Болела голова?</div></div>
         <div class="chips" style="margin:0">
-          <button type="button" class="chip ${entry?.headache === 1 ? 'on' : ''}" data-hb="1">Да</button>
-          <button type="button" class="chip ${entry?.headache === 0 ? 'on' : ''}" data-hb="0">Нет</button>
+          <button type="button" class="chip ${entry?.headache === 1 ? 'on' : ''}" data-hb="1">да</button>
+          <button type="button" class="chip ${entry?.headache === 0 ? 'on' : ''}" data-hb="0">нет</button>
         </div>
       </div>
 
       <div id="pain-block" ${entry?.headache === 1 ? '' : 'hidden'}>
         <label class="field">
           <span>Насколько сильно — <b id="int-val">${entry?.intensity ?? 4}</b> из 10</span>
-          <input class="slider" type="range" min="1" max="10" step="1" id="intensity"
-                 value="${entry?.intensity ?? 4}">
+          <input type="range" min="1" max="10" step="1" id="intensity" value="${entry?.intensity ?? 4}">
         </label>
         <label class="field">
-          <span>Что приняла (можно оставить пустым)</span>
-          <input type="text" id="med_text" placeholder="например, Цитрамон 2 таб"
+          <span>Что приняла, если принимала</span>
+          <input type="text" id="med_text" placeholder="например, цитрамон 2 таблетки"
                  value="${esc(entry?.med_text || '')}">
         </label>
-        <div class="chips" style="margin-bottom:14px">
+        <div class="chips" style="margin-bottom:16px">
           ${['помогло', 'немного помогло', 'не помогло'].map((w) => `
-            <button type="button" class="chip ${entry?.med_helped === w ? 'on' : ''}" data-helped="${w}">${w}</button>`).join('')}
+            <button type="button" class="chip ${entry?.med_helped === w ? 'on' : ''}"
+                    data-helped="${w}">${w}</button>`).join('')}
         </div>
       </div>
 
-      <div class="row" style="border:0;padding:0;margin-bottom:12px">
+      <div class="row" style="border:0;padding:0;margin-bottom:14px">
         <div class="main"><div class="name">Менструация</div></div>
         <div class="chips" style="margin:0">
-          <button type="button" class="chip ${entry?.mens === 1 ? 'on' : ''}" data-mens="1">Да</button>
-          <button type="button" class="chip ${entry?.mens === 0 ? 'on' : ''}" data-mens="0">Нет</button>
+          <button type="button" class="chip ${entry?.mens === 1 ? 'on' : ''}" data-mens="1">да</button>
+          <button type="button" class="chip ${entry?.mens === 0 ? 'on' : ''}" data-mens="0">нет</button>
         </div>
       </div>
 
-      <div class="name" style="margin-bottom:8px">Что было в этот день</div>
+      <div class="name" style="margin-bottom:8px">Что ещё было сегодня</div>
       <div class="chips" id="daily-chips" style="margin-top:0">
-        ${[['sleepShort', 'мало спала'], ['stress', 'напряжённый день'],
+        ${[['sleepShort', 'мало спала'], ['stress', 'нервный день'],
            ['alcohol', 'алкоголь'], ['coffee', 'много кофе']].map(([k, label]) => `
-          <button type="button" class="chip ${entry?.daily?.[k] ? 'on' : ''}" data-daily="${k}">${label}</button>`).join('')}
+          <button type="button" class="chip ${entry?.daily?.[k] ? 'on' : ''}"
+                  data-daily="${k}">${label}</button>`).join('')}
       </div>
-      <div class="explain">Эти отметки нужны и в спокойные дни тоже — иначе стресс и недосып
-        проверить нельзя: они будут «виноваты» просто потому, что их отмечают только когда болит.</div>
+      <div class="explain">Отмечай это и в хорошие дни тоже, даже когда ничего не болит.
+        Иначе недосып и нервы всегда будут выглядеть виноватыми — просто потому, что их
+        замечают только когда плохо. Спокойные дни нужны мне для сравнения.</div>
 
-      <button type="submit" class="primary" style="margin-top:14px">Сохранить</button>
+      <button type="submit" class="primary" style="margin-top:16px">Сохранить день</button>
     </form>
   </section>`;
 }
@@ -115,7 +182,12 @@ export function renderToday({ today, risk, analysis, entry, weather }) {
 /* ─────────────────────────── Триггеры ─────────────────────────── */
 
 export function renderTriggers(analysis) {
-  if (!analysis) return `<div class="card">Пока нет данных. Загрузи дневник на вкладке «Дневник».</div>`;
+  if (!analysis) {
+    return `<section class="card"><div class="empty">${catSleepy(88)}
+      <div class="t">Пока нечего показать</div>
+      <div class="s">Перенеси дневник на вкладке «Дневник» — и я всё посчитаю.</div>
+    </div></section>`;
+  }
 
   const beliefs = analysis.beliefs.filter((b) => b.namedTimes >= 2).slice(0, 8);
   const groups = new Map();
@@ -124,52 +196,70 @@ export function renderTriggers(analysis) {
     groups.get(f.group).push(f);
   });
   const order = { confirmed: 0, protective: 1, not_confirmed: 2, few_data: 3, no_data: 4 };
+  const GROUP_HINT = {
+    'Цикл': 'Гормональные колебания — самая частая причина мигрени у женщин.',
+    'Погода': 'Погоду винят чаще всего. Проверяю по настоящим наблюдениям, а не по ощущениям.',
+    'Режим': 'На выходных сдвигается сон и меняется привычный кофе — иногда это заметно.',
+    'Мои отметки': 'То, что ты отмечаешь сама каждый день.',
+    'Инерция': 'Не причина, а продолжение приступа. Считаю отдельно, чтобы не путать одно с другим.',
+  };
 
   return `
   <section class="card">
-    <h2>Во что верю против того, что в данных</h2>
+    <h2>${catCurious(26)} Во что верю и что вышло на самом деле</h2>
     ${beliefs.length ? beliefs.map((b) => `
       <div class="row">
         <div class="main">
-          <div class="name">${esc(b.label)} <span class="muted small">· названо ${b.namedTimes} раз</span></div>
-          <div class="note">${esc(b.comment)}</div>
+          <div class="name">${esc(b.label)}
+            <span class="muted small">· винила ${b.namedTimes}
+            ${plural(b.namedTimes, 'раз', 'раза', 'раз')}</span></div>
+          <div class="note">${esc(humanBelief(b))}</div>
         </div>
         <span class="tag ${b.status}">${BELIEF_LABEL[b.status]}</span>
       </div>`).join('')
-      : '<div class="muted small">Пока нечего сравнивать: в дневнике не отмечены предполагаемые причины.</div>'}
+      : `<div class="empty">${catUnsure(72)}<div class="t">Сравнивать пока нечего</div>
+        <div class="s">В дневнике не отмечено, что ты считала причиной.</div></div>`}
+    <div class="explain">Слева — то, что ты сама записывала как причину. Справа — что
+      получилось, когда я сверила это с данными. Расхождение — это нормально: мы запоминаем
+      то, что бросается в глаза, а не то, что случается чаще.</div>
   </section>
 
   ${[...groups.entries()].map(([group, list]) => `
   <section class="card">
     <h2>${esc(group)}</h2>
+    ${GROUP_HINT[group] ? `<div class="explain" style="margin-top:0;margin-bottom:14px">
+      ${esc(GROUP_HINT[group])}</div>` : ''}
     ${list.sort((a, b) => order[a.verdict] - order[b.verdict]).map((f) => `
       <div class="row">
+        <div class="stack">${catForVerdict(f.verdict, 38)}</div>
         <div class="main">
           <div class="name">${esc(f.label)}</div>
-          <div class="note">${f.rr
-            ? `болит в ${pct(f.p1)} таких дней против ${pct(f.p0)} обычно · риск ×${fix(f.rr)} `
-              + `<span class="muted">[${fix(f.lo)}; ${fix(f.hi)}]</span>`
-            : ''}${f.reason ? `<br>${esc(f.reason)}` : ''}</div>
+          ${f.rr ? `<div class="note">${humanNumbers(f)}</div>` : ''}
+          <div class="note">${esc(humanReason(f, analysis.testedHypotheses))}</div>
+          ${f.hint ? `<div class="note muted">${esc(f.hint)}</div>` : ''}
         </div>
         <span class="tag ${f.verdict}">${VERDICT_LABEL[f.verdict]}</span>
       </div>`).join('')}
   </section>`).join('')}
 
   ${renderLagChart(analysis.lagProfiles)}
+  ${renderMethod(analysis)}`;
+}
 
-  <section class="card">
-    <h2>Как считалось</h2>
-    <div class="explain">
-      Дней с записями: ${analysis.knownDays}, из них с болью ${analysis.headacheDays}
-      (${pct(analysis.baseRate)}). Проверено гипотез: ${analysis.testedHypotheses} — список
-      составлен заранее, до подсчёта. К каждой применена поправка Беньямини — Хохберга:
-      если проверять много вариантов, случайная «находка» появится почти наверняка.
-      Выжившие гипотезы дополнительно проверены блочным бутстрапом, потому что дни идут
-      подряд и зависят друг от друга: после дня с болью следующий день тоже рискованнее.
-      Всё, что не прошло эти два фильтра, помечено как «не подтвердился» — а не выдаётся
-      за триггер.
-    </div>
-  </section>`;
+function humanBelief(b) {
+  switch (b.status) {
+    case 'supported':
+      return `И данные согласны. ${b.comment.replace(/^подтверждается:\s*/i, '')}`;
+    case 'not_supported':
+      return 'Я проверила это со всех сторон и связи не нашла. Скорее всего, такие дни просто'
+        + ' запоминались ярче остальных.';
+    case 'needs_daily':
+      return 'Проверить пока не могу: ты отмечаешь это только когда болит. Начни отмечать'
+        + ' каждый день — тогда будет с чем сравнивать.';
+    default:
+      return 'Этого нет ни в погоде, ни в цикле, так что сверить не с чем. Если начнёшь'
+        + ' отмечать каждый день, смогу проверить.';
+  }
 }
 
 function renderLagChart(profiles) {
@@ -178,23 +268,57 @@ function renderLagChart(profiles) {
   if (!blocks.length) return '';
   return `
   <section class="card">
-    <h2>Через сколько срабатывает</h2>
+    <h2>${catUnsure(26)} Причина или уже начало приступа</h2>
     ${blocks.map((b) => `
       <h3>${esc(b.label)}</h3>
-      <div class="bars" style="margin-bottom:14px">
+      <div class="bars" style="margin-bottom:16px">
         ${b.points.map((pt) => {
           const rr = pt.rr ?? 0;
-          const width = Math.min(100, (rr / 2.5) * 100);
           return `<div class="bar-row">
-            <div>${pt.lag === 0 ? 'в тот же день' : `за ${pt.lag} дн.`}</div>
-            <div class="bar-track"><div class="bar-fill ${rr < 1.15 ? 'low' : ''}" style="width:${width}%"></div></div>
-            <div class="bar-value">×${fix(rr)}</div>
+            <div>${pt.lag === 0 ? 'в тот же день'
+              : `${pt.lag} ${plural(pt.lag, 'день', 'дня', 'дней')} назад`}</div>
+            <div class="bar-track"><div class="bar-fill ${rr < 1.15 ? 'low' : ''}"
+                 style="width:${Math.min(100, (rr / 2.5) * 100)}%"></div></div>
+            <div class="bar-value">×${fix(rr, 1)}</div>
           </div>`;
         }).join('')}
       </div>`).join('')}
-    <div class="explain">Форма важнее отдельного числа. Фактор, который «срабатывает» только
-      в сам день боли, скорее часть приступа, чем его причина: тяга к сладкому или зевота —
-      это уже начало, а не провокатор.</div>
+    <div class="explain">Зачем это нужно: настоящая причина обычно срабатывает заранее, за день
+      или два. А то, что совпадает только в сам день боли, чаще всего уже начало приступа,
+      а не его причина. Классический пример — тянет на сладкое не потому, что шоколад вызвал
+      боль, а потому, что приступ уже начался.</div>
+  </section>`;
+}
+
+function renderMethod(a) {
+  const conf = a.factors.filter((f) => f.verdict === 'confirmed').length;
+  return `
+  <section class="card">
+    <h2>${catCalm(26)} Откуда берутся эти выводы</h2>
+    <div class="steps">
+      <div class="step"><div class="num"></div><div class="txt">
+        <b>Сначала составляю список подозреваемых</b> — до того, как посмотрю на цифры.
+        Так нельзя подогнать вывод под то, во что уже веришь.</div></div>
+      <div class="step"><div class="num"></div><div class="txt">
+        <b>Считаю по всем дням, а не по приступам.</b> Спокойные дни так же важны: без них
+        не понять, что необычного было в дни с болью.</div></div>
+      <div class="step"><div class="num"></div><div class="txt">
+        <b>Смотрю со сдвигом на день и два.</b> Погода могла испортиться вчера,
+        а голова заболеть сегодня.</div></div>
+      <div class="step"><div class="num"></div><div class="txt">
+        <b>Делаю скидку на число попыток.</b> Если перебрать ${a.testedHypotheses} версий,
+        одна покажется виновной просто по случайности — поэтому чем больше я проверяю,
+        тем строже порог.</div></div>
+      <div class="step"><div class="num"></div><div class="txt">
+        <b>И проверяю на прочность:</b> выкидываю случайные куски дневника и смотрю, держится
+        ли связь. Рассыпалась — значит, показалось.</div></div>
+    </div>
+    <div class="explain">На твоих данных: ${a.knownDays}
+      ${plural(a.knownDays, 'день', 'дня', 'дней')} с записями, из них ${a.headacheDays} с болью.
+      Проверено версий: ${a.testedHypotheses}, прошло проверку: ${conf}.
+      ${conf === 0 ? ' Ничего не подтвердилось — это тоже честный ответ, а не пустой экран.' : ''}</div>
+    <div class="explain warm">Я не врач и не ставлю диагнозов. Я только показываю, что видно
+      в твоих записях, — с этим удобно идти к доктору.</div>
   </section>`;
 }
 
@@ -204,110 +328,122 @@ export function renderDiary({ days, stats }) {
   const last = days.filter((d) => d.headache !== null).slice(-40).reverse();
   return `
   <section class="card">
-    <h2>Что уже есть</h2>
+    <h2>${catCalm(26)} Что уже накопилось</h2>
     <div class="kv">
-      <div class="k">Записей</div><div>${stats.entries}</div>
-      <div class="k">Дней с болью</div><div>${stats.headacheDays}</div>
-      <div class="k">Период</div><div>${stats.from ? `${humanDate(stats.from)} — ${humanDate(stats.to)}` : '—'}</div>
-      <div class="k">Дней погоды</div><div>${stats.weatherDays}</div>
+      <div class="k">Дней записано</div><div>${stats.entries}</div>
+      <div class="k">Из них с болью</div><div>${stats.headacheDays}</div>
+      <div class="k">Период</div><div>${stats.from
+        ? `${humanDate(stats.from)} — ${humanDate(stats.to)}` : '—'}</div>
+      <div class="k">Дней с погодой</div><div>${stats.weatherDays}</div>
     </div>
-    <label class="filebtn" style="margin-top:14px">
+    <label class="filebtn" style="margin-top:16px">
       <input type="file" id="file-migrebot" accept=".xlsx">
-      <button type="button" class="primary" onclick="this.parentNode.querySelector('input').click()">
-        Загрузить выгрузку Мигребота
+      <button type="button" class="primary"
+              onclick="this.parentNode.querySelector('input').click()">
+        Перенести дневник из Мигребота
       </button>
     </label>
-    <div class="explain">В Мигреботе: «Скачать дневник» → выбери файл здесь. Импорт можно
-      повторять: записи по одинаковым датам обновятся, дубликатов не будет.</div>
+    <div class="explain">В Мигреботе нажми «Скачать дневник» и выбери этот файл здесь.
+      Переносить можно сколько угодно раз: дни с одинаковой датой просто обновятся,
+      дубликатов не будет.</div>
   </section>
 
   <section class="card">
     <h2>Последние дни</h2>
     ${last.length ? last.map((d) => `
       <div class="row">
+        <div class="stack">${d.headache === 1 ? catAchy(34) : catCalm(34)}</div>
         <div class="main">
           <div class="name">${humanDate(d.date)}${d.headache === 1
-            ? ` · боль ${d.intensity ?? '?'}/10` : ' · спокойно'}</div>
+            ? ` · болело на ${d.intensity ?? '?'} из 10` : ''}</div>
           <div class="note">${[
+            d.headache === 1 ? null : 'голова не болела',
             d.mens === 1 ? 'менструация' : null,
-            d.medTaken ? 'принимала препарат' : null,
-            d.p_mean !== null ? `${Math.round(d.p_mean)} гПа` : null,
-            d.selfTriggers?.length ? d.selfTriggers.join(', ') : null,
+            d.medTaken ? 'принимала таблетку' : null,
+            d.p_mean !== null ? `давление ${Math.round(d.p_mean)}` : null,
+            d.selfTriggers?.length ? `винила: ${d.selfTriggers.join(', ').toLowerCase()}` : null,
           ].filter(Boolean).join(' · ')}</div>
         </div>
-        <span class="tag ${d.headache === 1 ? 'not_supported' : 'confirmed'}">${d.headache === 1 ? 'болело' : 'ок'}</span>
-      </div>`).join('') : '<div class="muted small">Записей пока нет.</div>'}
+      </div>`).join('')
+      : `<div class="empty">${catSleepy(80)}<div class="t">Записей пока нет</div>
+         <div class="s">Отметь сегодняшний день на первой вкладке.</div></div>`}
   </section>`;
 }
 
 /* ─────────────────────────── Врачу ─────────────────────────── */
 
 export function renderDoctor({ analysis, risk }) {
-  if (!analysis) return `<div class="card">Нет данных для сводки.</div>`;
+  if (!analysis) {
+    return `<section class="card"><div class="empty">${catSleepy(88)}
+      <div class="t">Сводку собрать не из чего</div>
+      <div class="s">Сначала перенеси дневник.</div></div></section>`;
+  }
   const m = analysis.meds;
   const months = m.months.slice(-12);
   const maxBar = Math.max(10, ...months.map((x) => Math.max(x.medDays, x.headacheDays)));
   const confirmed = analysis.factors.filter((f) => f.verdict === 'confirmed');
+  const perMonth = (analysis.headacheDays / Math.max(1, m.months.length)).toFixed(1);
 
   return `
   <section class="card">
-    <h2>Коротко</h2>
+    <h2>${catCurious(26)} Коротко для приёма</h2>
     <div class="kv">
-      <div class="k">Период наблюдения</div><div>${analysis.knownDays} дней</div>
+      <div class="k">Наблюдаю</div><div>${analysis.knownDays} дней</div>
       <div class="k">Дней с болью</div><div>${analysis.headacheDays} (${pct(analysis.baseRate)})</div>
-      <div class="k">В среднем в месяц</div><div>${(analysis.headacheDays / Math.max(1, m.months.length)).toFixed(1)} дней</div>
-      <div class="k">Максимум дней с препаратом в месяц</div><div>${m.maxMedDays}</div>
-      <div class="k">Месяцев с 10+ днями приёма</div><div>${m.riskyMonths}</div>
+      <div class="k">В среднем за месяц</div><div>${perMonth}</div>
+      <div class="k">Больше всего дней с таблеткой в одном месяце</div><div>${m.maxMedDays}</div>
     </div>
     ${m.riskyMonths > 0
-      ? `<div class="explain" style="color:var(--warn)">Есть месяцы, где обезболивающие принимались
-         10 и более дней. Это тот порог, при котором обсуждают риск лекарственной головной боли —
-         стоит показать врачу.</div>`
-      : `<div class="explain">Порог настороженности по злоупотреблению обезболивающими
-         (10 дней в месяц) не превышен ни в одном месяце.</div>`}
+      ? `<div class="explain warm">Были месяцы, когда обезболивающее принималось десять дней
+         и чаще — таких ${m.riskyMonths}. С этого количества врачи начинают проверять, не
+         поддерживают ли сами таблетки головную боль. Стоит показать эту цифру доктору.</div>`
+      : `<div class="explain">Таблетки ни в одном месяце не доходили до десяти дней — это тот
+         порог, с которого врачи начинают беспокоиться, что обезболивающие сами поддерживают
+         боль. У тебя максимум ${m.maxMedDays}.</div>`}
   </section>
 
   <section class="card">
-    <h2>Дни с болью и с препаратами по месяцам</h2>
+    <h2>Как шли месяцы</h2>
     <div class="bars">
       ${months.map((x) => `
         <div class="bar-row">
           <div>${x.month}</div>
-          <div class="bar-track">
-            <div class="bar-fill ${x.medDays >= m.threshold ? '' : 'low'}"
-                 style="width:${(x.headacheDays / maxBar) * 100}%"></div>
-          </div>
+          <div class="bar-track"><div class="bar-fill ${x.medDays >= m.threshold ? '' : 'low'}"
+               style="width:${(x.headacheDays / maxBar) * 100}%"></div></div>
           <div class="bar-value">${x.headacheDays} / ${x.medDays}</div>
         </div>`).join('')}
     </div>
-    <div class="explain">Слева месяц, справа «дней с болью / дней с приёмом препарата».</div>
+    <div class="explain">Справа две цифры: сколько дней в этом месяце болело и в скольких
+      из них ты принимала таблетку.</div>
   </section>
 
   <section class="card">
-    <h2>Что подтвердилось на данных</h2>
+    <h2>${catAchy(26)} Что подтвердилось на данных</h2>
     ${confirmed.length ? confirmed.map((f) => `
       <div class="row">
+        <div class="stack">${catAchy(34)}</div>
         <div class="main">
           <div class="name">${esc(f.label)}</div>
-          <div class="note">риск ×${fix(f.rr)} [${fix(f.lo)}; ${fix(f.hi)}] · ${f.exposedHeadache} приступов
-            из ${f.exposedDays} таких дней</div>
+          <div class="note">болит в ${pct(f.p1)} таких дней против ${pct(f.p0)} в остальные —
+            это в ${fix(f.rr)} раза чаще. Случаев: ${f.exposedHeadache} из ${f.exposedDays}.</div>
         </div>
-        <span class="tag confirmed">подтверждён</span>
+        <span class="tag confirmed">${VERDICT_LABEL.confirmed}</span>
       </div>`).join('')
-      : '<div class="muted small">Ни один фактор пока не прошёл проверку. Это тоже результат.</div>'}
-    ${risk?.backtest ? `<div class="explain">Прогноз проверен на будущем: обучение на
-      ${risk.backtest.trainDays} днях, проверка на ${risk.backtest.testDays} последующих
-      (${humanDate(risk.backtest.testFrom)} — ${humanDate(risk.backtest.testTo)}).
-      AUC ${fix(risk.backtest.auc, 3)}, выигрыш над простым средним
-      ${risk.backtest.beatsBaseline ? 'есть' : 'пока отсутствует'}.</div>` : ''}
+      : `<div class="empty">${catUnsure(72)}<div class="t">Пока ничего не подтвердилось</div>
+         <div class="s">Это тоже результат: простых объяснений в этих данных нет.</div></div>`}
+    ${risk?.backtest ? `<div class="explain">Прогноз проверен по-честному: училась на
+      ${risk.backtest.trainDays} днях, а угадывала на ${risk.backtest.testDays} следующих,
+      которых до этого не видела. Выходит
+      ${risk.backtest.beatsBaseline ? 'немного лучше' : 'пока не лучше'}, чем просто
+      «в среднем ${pct(risk.backtest.baseRate)} дней болит».</div>` : ''}
   </section>
 
   <section class="card">
-    <h2>Отдать врачу или сохранить</h2>
-    <button type="button" class="primary" id="btn-report">Сводка текстом</button>
-    <button type="button" class="ghost" id="btn-export">Резервная копия (json)</button>
-    <div class="explain">Приложение не ставит диагнозов и не назначает лечение. Это описание
-      того, что видно в твоих записях, для разговора с врачом.</div>
+    <h2>Забрать с собой</h2>
+    <button type="button" class="primary" id="btn-report">Сводка текстом для врача</button>
+    <button type="button" class="ghost" id="btn-export">Сохранить копию данных</button>
+    <div class="explain warm">Приложение не ставит диагнозов и не назначает лечение.
+      Это просто аккуратно собранная картина твоих записей.</div>
   </section>`;
 }
 
@@ -316,40 +452,45 @@ export function renderDoctor({ analysis, risk }) {
 export function renderSettings(settings, stats) {
   return `
   <section class="card">
-    <h2>Город для погоды</h2>
+    <h2>${catCurious(26)} Город для погоды</h2>
     <label class="field">
-      <span>Найти город</span>
+      <span>Найти свой город</span>
       <input type="text" id="city-input" value="${esc(settings.city)}" placeholder="Санкт-Петербург">
     </label>
     <div id="city-results"></div>
-    <button type="button" class="ghost" id="btn-find-city">Найти</button>
-    <button type="button" class="primary" id="btn-sync-weather" style="margin-top:8px">
-      Обновить погоду за весь период
+    <button type="button" class="ghost" id="btn-find-city">Найти город</button>
+    <button type="button" class="primary" id="btn-sync-weather" style="margin-top:10px">
+      Обновить погоду за все дни
     </button>
-    <div class="explain">Сейчас: ${esc(settings.city)} (${fix(+settings.lat, 3)}, ${fix(+settings.lon, 3)}).
-      История давления, температуры, влажности и ветра тянется автоматически и хранится в телефоне.
-      Загружено дней погоды: ${stats.weatherDays}.</div>
+    <div class="explain">Сейчас стоит ${esc(settings.city)}. Историю давления, температуры,
+      влажности и ветра приложение скачивает само и держит у себя — поэтому всё работает
+      и без интернета. Уже скачано дней: ${stats.weatherDays}.</div>
+    <div class="source">Откуда погода: сервис Open-Meteo. История — из архива ERA5, это
+      европейский реанализ наблюдений за погодой по всему миру; свежие дни и прогноз —
+      из их же прогноза. Данные открытые и бесплатные, аккаунт не нужен.</div>
   </section>
 
   <section class="card">
-    <h2>Данные</h2>
-    <button type="button" class="ghost" id="btn-export2">Скачать резервную копию</button>
+    <h2>${catCalm(26)} Твои данные</h2>
+    <button type="button" class="ghost" id="btn-export2">Сохранить копию в файл</button>
     <label class="filebtn">
       <input type="file" id="file-backup" accept=".json">
-      <button type="button" class="ghost" onclick="this.parentNode.querySelector('input').click()">
+      <button type="button" class="ghost"
+              onclick="this.parentNode.querySelector('input').click()">
         Восстановить из копии
       </button>
     </label>
-    <button type="button" class="ghost" id="btn-wipe" style="color:var(--bad)">Удалить все данные</button>
-    <div class="explain">Всё хранится только на этом устройстве: ни аккаунта, ни сервера, ни отправки
-      куда-либо. Резервная копия создаётся вручную и остаётся у тебя.</div>
+    <button type="button" class="ghost" id="btn-wipe" style="color:#C4697F">Удалить всё</button>
+    <div class="explain">Записи живут только в этом телефоне: ни аккаунта, ни сервера,
+      никуда ничего не отправляется. Единственный способ вынести данные — сохранить копию
+      самой. Собираешься менять телефон — сделай копию заранее.</div>
   </section>
 
   <section class="card">
-    <h2>О приложении</h2>
-    <div class="explain">«Ясная голова» — дневник головной боли, который сам ищет закономерности:
-      подтягивает погоду по твоему городу, проверяет факторы со сдвигом на 1–2 суток, делает поправку
-      на множественность проверок и честно говорит «не подтвердилось», когда данных не хватает.
-      Не медицинское устройство: диагнозов не ставит и лечение не назначает.</div>
+    <h2>${catSleepy(26)} Про приложение</h2>
+    <div class="explain">«Ясная голова» — дневник головной боли, который не просто хранит
+      записи, а сам ищет закономерности: подтягивает настоящую погоду, сравнивает дни с болью
+      и без, проверяет со сдвигом на сутки и честно говорит «не знаю», когда данных мало.
+      Ничего не обещает и не лечит — помогает разобраться и подготовиться к врачу.</div>
   </section>`;
 }

@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Дневник головной боли, который сам ищет триггеры",
   "scripts": {
-    "test": "node tests/stats.test.mjs && node tests/import.test.mjs && node tests/engine.test.mjs",
+    "test": "node tests/stats.test.mjs && node tests/import.test.mjs && node tests/engine.test.mjs && node tests/ui.test.mjs",
     "sync": "cap sync android",
     "apk": "cd android && gradlew.bat assembleDebug"
   },

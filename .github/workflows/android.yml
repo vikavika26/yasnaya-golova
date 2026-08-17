@@ -23,6 +23,7 @@ jobs:
           node tests/stats.test.mjs
           node tests/import.test.mjs
           node tests/engine.test.mjs
+          node tests/ui.test.mjs
 
       - uses: actions/setup-java@v4
         with:
