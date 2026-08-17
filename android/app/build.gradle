@@ -7,9 +7,14 @@ android {
         applicationId "ru.yasnayagolova.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // номер сборки подставляет CI: иначе каждая версия выглядит одинаково
-        versionCode (System.getenv('ANDROID_VERSION_CODE') ?: '1').toInteger()
-        versionName System.getenv('ANDROID_VERSION_NAME') ?: '1.0'
+        // Номер сборки подставляет CI: иначе каждая версия выглядит одинаково.
+        // Значения считаем в локальные переменные заранее: запись
+        // `versionCode (expr).toInteger()` Groovy разбирает как вызов
+        // versionCode(expr) с последующим .toInteger() на результате — и падает.
+        def envVersionCode = System.getenv('ANDROID_VERSION_CODE')
+        def envVersionName = System.getenv('ANDROID_VERSION_NAME')
+        versionCode envVersionCode ? envVersionCode as int : 1
+        versionName envVersionName ?: '1.0'
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
