@@ -35,11 +35,20 @@ jobs:
       - name: Положить веб-приложение внутрь APK
         run: npx cap sync android
 
+      # Проект собирается под compileSdk 36. На раннере обычно есть более старые
+      # платформы, поэтому доустанавливаем нужную — иначе Gradle падает
+      # с «Failed to find target with hash string android-36».
+      - name: Доустановить платформу Android 36
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-36" "build-tools;36.0.0" >/dev/null
+
       - name: Собрать APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
