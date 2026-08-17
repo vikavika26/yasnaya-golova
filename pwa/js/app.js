@@ -4,6 +4,7 @@ import * as weatherApi from './weather.js';
 import { buildDays, analyze, riskModel } from './engine.js';
 import { importMigrebotFile } from './import.js';
 import * as ui from './ui.js';
+import * as notify from './notify.js';
 
 const view = document.getElementById('view');
 const title = document.getElementById('screen-title');
@@ -15,6 +16,15 @@ const todayIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60
 
 const state = { screen: 'today', days: [], analysis: null, risk: null, stats: null,
   settings: null, savedAt: null };
+
+/** Тема применяется к <html>, чтобы переменные цвета подхватились сразу. */
+function applyTheme(choice) {
+  const dark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const theme = choice === 'auto' ? (dark ? 'dark' : 'light') : choice;
+  document.documentElement.dataset.theme = theme;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = { light: '#FFF8F4', dark: '#16141A', dim: '#14131A' }[theme];
+}
 let toastTimer = null;
 
 function toast(text, ms = 2600) {
@@ -251,6 +261,40 @@ function bindSettings() {
     render();
   });
 
+  document.querySelectorAll('[data-theme-opt]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await store.setSetting('theme', btn.dataset.themeOpt);
+      state.settings = await store.allSettings();
+      applyTheme(state.settings.theme);
+      render();
+    });
+  });
+
+  const setReminder = async (on) => {
+    if (on) {
+      const granted = await notify.requestPermission();
+      if (!granted) return toast('Без разрешения на уведомления не смогу напоминать', 4000);
+    }
+    await store.setSetting('reminderOn', on);
+    state.settings = await store.allSettings();
+    const res = await notify.sync({ enabled: on, time: state.settings.reminderTime });
+    render();
+    if (!on) toast('Напоминания выключены');
+    else if (res.ok) toast(`Буду напоминать в ${state.settings.reminderTime}`);
+    else toast(`Напоминания недоступны: ${res.reason}`, 4000);
+  };
+  document.querySelectorAll('[data-reminder]').forEach((btn) => {
+    btn.addEventListener('click', () => setReminder(btn.dataset.reminder === 'on'));
+  });
+  document.getElementById('reminder-time')?.addEventListener('change', async (e) => {
+    await store.setSetting('reminderTime', e.target.value);
+    state.settings = await store.allSettings();
+    if (state.settings.reminderOn) {
+      await notify.sync({ enabled: true, time: e.target.value });
+      toast(`Перенесла напоминание на ${e.target.value}`);
+    }
+  });
+
   document.getElementById('btn-export2')?.addEventListener('click', exportBackup);
 
   document.getElementById('file-backup')?.addEventListener('change', async (e) => {
@@ -297,12 +341,20 @@ document.getElementById('btn-settings').addEventListener('click', () => {
 
 (async function boot() {
   await recompute();
+  applyTheme(state.settings?.theme || 'auto');
+  window.matchMedia?.('(prefers-color-scheme: dark)')
+    .addEventListener?.('change', () => applyTheme(state.settings?.theme || 'auto'));
   render();
+  // расписание напоминаний приводим в порядок при каждом запуске
+  if (state.settings?.reminderOn) {
+    notify.sync({ enabled: true, time: state.settings.reminderTime }).catch(() => {});
+  }
   if (state.stats.entries && navigator.onLine) {
     // погода догоняется в фоне, экран не ждёт сети
     syncWeather().then(async () => { await recompute(); render(); });
   }
-  if ('serviceWorker' in navigator) {
+  // В APK файлы уже локальные, service worker там лишний и только мешает
+  if ('serviceWorker' in navigator && !window.Capacitor?.isNativePlatform?.()) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 })();

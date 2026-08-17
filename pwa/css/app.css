@@ -2,13 +2,13 @@
    Цвета не кричат, но статусы всё равно различимы — важно, чтобы «влияет» и
    «просто совпадение» читались с одного взгляда, даже если человеку сейчас плохо. */
 
-:root {
+:root, html[data-theme="light"] {
   --bg: #FFF8F4;
   --bg-tint: #FDF2F7;
   --card: #FFFFFF;
   --ink: #4A4352;
-  --ink-soft: #6E6579;
-  --muted: #9C94A8;
+  --ink-soft: #5E566B;
+  --muted: #7C7389;
   --line: #F2E9F0;
 
   --lav: #C7B8F0;
@@ -281,3 +281,123 @@ details.more[open] > summary::after { content: ' ↑'; }
 .bar-track.pair .bar-fill.lav { background: var(--lav); }
 
 button.ghost.danger { color: #C4697F; }
+
+
+/* ── Тёмная тема ──────────────────────────────────────────────────────
+   Нужна не для красоты: при мигрени часто светобоязнь, и белый экран
+   в приступе физически больно смотреть. */
+html[data-theme="dark"] {
+  --bg: #16141A;
+  --bg-tint: #1D1A22;
+  --card: #201D27;
+  --ink: #EDE9F2;
+  --ink-soft: #B7AEC4;
+  --muted: #948BA3;
+  --line: #302B39;
+
+  --lav: #A392D9;
+  --lav-soft: #2B2440;
+  --mint: #6FBF9F;
+  --mint-soft: #1E332B;
+  --peach: #D99B7E;
+  --peach-soft: #33251E;
+  --sun: #D9B972;
+  --sun-soft: #322A1B;
+  --rose: #D98BA1;
+  --rose-soft: #35222A;
+
+  --shadow: 0 6px 22px rgba(0, 0, 0, .35);
+  --shadow-lift: 0 10px 30px rgba(0, 0, 0, .45);
+}
+
+/* «Щажу глаза»: приглушённая тёмная тема без ярких пятен и без белого текста */
+html[data-theme="dim"] {
+  --bg: #14131A;
+  --bg-tint: #191821;
+  --card: #1A1922;
+  --ink: #C9C3D4;
+  --ink-soft: #9A94A8;
+  --muted: #7E7889;
+  --line: #262532;
+
+  --lav: #8878B0;
+  --lav-soft: #232035;
+  --mint: #5E9B83;
+  --mint-soft: #1B2823;
+  --peach: #B08268;
+  --peach-soft: #2A211C;
+  --sun: #B29A5F;
+  --sun-soft: #282218;
+  --rose: #B0768A;
+  --rose-soft: #2B1F25;
+
+  --shadow: none;
+  --shadow-lift: 0 6px 18px rgba(0, 0, 0, .4);
+}
+html[data-theme="dim"] body { background-image: none; }
+html[data-theme="dim"] .card { box-shadow: none; }
+html[data-theme="dim"] button.primary { box-shadow: none; }
+html[data-theme="dark"] body,
+html[data-theme="dim"] body { background-image: none; }
+html[data-theme="dark"] .tabs,
+html[data-theme="dim"] .tabs { box-shadow: 0 -8px 24px rgba(0, 0, 0, .4); }
+html[data-theme="dark"] .chip.on,
+html[data-theme="dim"] .chip.on { color: #16141A; }
+html[data-theme="dark"] button.primary,
+html[data-theme="dim"] button.primary { color: #16141A; }
+html[data-theme="dark"] .score,
+html[data-theme="dim"] .score { background: var(--rose); color: #16141A; }
+html[data-theme="dark"] .tab.active,
+html[data-theme="dim"] .tab.active { color: var(--lav); }
+html[data-theme="dark"] .day.pain { border-color: #4A2E39; }
+html[data-theme="dim"] .day.pain { border-color: #3A2830; }
+html[data-theme="dark"] .tag.confirmed, html[data-theme="dark"] .tag.supported { color: #E9A8BC; }
+html[data-theme="dim"] .tag.confirmed, html[data-theme="dim"] .tag.supported { color: #C99AAB; }
+html[data-theme="dark"] .tag.not_confirmed { color: #B9A9E8; }
+html[data-theme="dim"] .tag.not_confirmed { color: #A093C7; }
+html[data-theme="dark"] .tag.protective, html[data-theme="dark"] .tag.not_supported { color: #86D0AF; }
+html[data-theme="dim"] .tag.protective, html[data-theme="dim"] .tag.not_supported { color: #7CB59B; }
+html[data-theme="dark"] .tag.few_data { color: #DFC078; }
+html[data-theme="dim"] .tag.few_data { color: #B9A473; }
+html[data-theme="dark"] .note.warn, html[data-theme="dim"] .note.warn { color: var(--sun); }
+html[data-theme="dark"] .hintline, html[data-theme="dim"] .hintline { color: var(--sun); }
+html[data-theme="dark"] details.more > summary,
+html[data-theme="dim"] details.more > summary { color: var(--lav); }
+html[data-theme="dark"] .step .num,
+html[data-theme="dim"] .step .num { color: var(--lav); }
+html[data-theme="dark"] button.ghost.danger,
+html[data-theme="dim"] button.ghost.danger { color: #E29AAC; }
+
+/* ── Иерархия: главное крупнее и заметнее остального ────────────────── */
+.card.hero {
+  background: linear-gradient(160deg, var(--lav-soft) 0%, var(--card) 62%);
+  border-color: transparent;
+  box-shadow: var(--shadow-lift);
+}
+.card.lead h2 { font-size: 17px; }
+.section-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); margin: 22px 6px 10px;
+}
+
+/* свёрнутый список неподтверждённого */
+.rest { font-size: 14px; color: var(--ink-soft); line-height: 1.6; }
+.rest b { color: var(--ink); font-weight: 600; }
+
+/* выбор темы */
+.theme-row { display: flex; gap: 8px; margin-top: 4px; }
+.theme-opt {
+  flex: 1; border-radius: 14px; border: 1.5px solid var(--line); background: var(--bg);
+  padding: 11px 6px; font-family: inherit; font-size: 13.5px; color: var(--ink-soft);
+  cursor: pointer; text-align: center;
+}
+.theme-opt.on { border-color: var(--lav); background: var(--lav-soft); color: var(--ink); font-weight: 600; }
+
+/* строка настройки с переключателем */
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.switch-row .sw-name { font-size: 15.5px; font-weight: 600; }
+.switch-row .sw-note { font-size: 13.5px; color: var(--ink-soft); margin-top: 3px; }
+input[type="time"] {
+  padding: 12px 14px; border-radius: 14px; background: var(--bg); color: var(--ink);
+  border: 1.5px solid var(--line); font-size: 15.5px; font-family: inherit;
+}

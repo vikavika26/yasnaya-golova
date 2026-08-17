@@ -29,6 +29,10 @@ export const DEFAULTS = {
   lat: 59.9386,
   lon: 30.3141,
   tz: 'Europe/Moscow',
+  // 'auto' подхватывает системную тему, 'dim' — щадящий режим при светобоязни
+  theme: 'auto',
+  reminderOn: false,
+  reminderTime: '21:00',
   // Что человек отмечает каждый день по своей воле. Без ежедневных отметок
   // фактор нельзя проверить — см. пояснение в engine.js.
   dailyFactors: ['sleepShort', 'stress', 'alcohol', 'coffee'],

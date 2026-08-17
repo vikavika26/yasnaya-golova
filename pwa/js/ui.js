@@ -213,20 +213,7 @@ export function renderTriggers(analysis) {
       вкладке — включая дни без боли. Наберётся 30 отметок, и посчитаю.</div></div>` : ''}
   </section>
 
-  ${[...groups.entries()].map(([group, list]) => `
-  <section class="card">
-    <h2>${esc(group)}</h2>
-    ${list.sort((a, b) => order[a.verdict] - order[b.verdict]).map((f) => `
-      <div class="row">
-        <div class="stack">${catForVerdict(f.verdict, 34)}</div>
-        <div class="main">
-          <div class="name">${esc(f.label)}</div>
-          ${f.rr ? `<div class="nums">${humanNumbers(f)}</div>` : ''}
-          <div class="note">${esc(shortReason(f, analysis.testedHypotheses))}</div>
-        </div>
-        <span class="tag ${f.verdict}">${VERDICT_LABEL[f.verdict]}</span>
-      </div>`).join('')}
-  </section>`).join('')}
+  ${renderFactorGroups(groups, order, analysis)}
 
   ${renderLagChart(analysis.lagProfiles)}
 
@@ -252,6 +239,39 @@ export function renderTriggers(analysis) {
       <div class="note">Не врач и не ставлю диагнозов: показываю только то, что видно
         в твоих записях.</div>`)}
   </section>`;
+}
+
+/**
+ * Группы гипотез. Подробно показываем только важное: подтверждённое, защитное
+ * и «мало случаев». Пятнадцать строк «просто совпадение» подряд — это шум,
+ * поэтому они сворачиваются в одну фразу.
+ */
+function renderFactorGroups(groups, order, analysis) {
+  const out = [];
+  for (const [group, list] of groups) {
+    const sorted = [...list].sort((a, b) => order[a.verdict] - order[b.verdict]);
+    const shown = sorted.filter((f) => f.verdict !== 'not_confirmed');
+    const rest = sorted.filter((f) => f.verdict === 'not_confirmed');
+    out.push(`
+  <section class="card">
+    <h2>${esc(group)}</h2>
+    ${shown.map((f) => `
+      <div class="row">
+        <div class="stack">${catForVerdict(f.verdict, 34)}</div>
+        <div class="main">
+          <div class="name">${esc(f.label)}</div>
+          ${f.rr ? `<div class="nums">${humanNumbers(f)}</div>` : ''}
+          <div class="note">${esc(shortReason(f, analysis.testedHypotheses))}</div>
+        </div>
+        <span class="tag ${f.verdict}">${VERDICT_LABEL[f.verdict]}</span>
+      </div>`).join('')}
+    ${rest.length ? details(`Проверила и не подтвердилось: ${rest.length}`, `
+      <div class="rest">${rest.map((f) => `<b>${esc(f.label.toLowerCase())}</b> — `
+        + `${pct(f.p1)} против ${pct(f.p0)}`).join('; ')}.
+      <div class="note">Разница в этих случаях не больше случайной.</div></div>`) : ''}
+  </section>`);
+  }
+  return out.join('');
 }
 
 function renderLagChart(profiles) {
@@ -407,7 +427,42 @@ export function renderDoctor({ analysis, risk }) {
 /* ─────────────────────────── Настройки ─────────────────────────── */
 
 export function renderSettings(settings, stats) {
+  const theme = settings.theme || 'auto';
   return `
+  <section class="card">
+    <h2>${catCalm(24)} Как выглядит</h2>
+    <div class="theme-row">
+      ${[['auto', 'как в системе'], ['light', 'светлая'],
+         ['dark', 'тёмная'], ['dim', 'щажу глаза']].map(([key, label]) => `
+        <button type="button" class="theme-opt ${theme === key ? 'on' : ''}"
+                data-theme-opt="${key}">${label}</button>`).join('')}
+    </div>
+    <div class="note">«Щажу глаза» — приглушённый тёмный режим без ярких пятен:
+      при мигрени часто светобоязнь, и обычный экран в приступе смотреть больно.</div>
+  </section>
+
+  <section class="card">
+    <h2>${catAchy(24)} Напоминание</h2>
+    <div class="switch-row">
+      <div>
+        <div class="sw-name">Напоминать отметить день</div>
+        <div class="sw-note">Раз в день, чтобы дневник не забрасывался</div>
+      </div>
+      <div class="chips" style="margin:0">
+        <button type="button" class="chip ${settings.reminderOn ? 'on' : ''}"
+                data-reminder="on">вкл</button>
+        <button type="button" class="chip ${settings.reminderOn ? '' : 'on'}"
+                data-reminder="off">выкл</button>
+      </div>
+    </div>
+    <label class="field">
+      <span>Во сколько</span>
+      <input type="time" id="reminder-time" value="${esc(settings.reminderTime || '21:00')}">
+    </label>
+    <div class="note" id="reminder-status">Спокойные дни тоже важны — без них
+      сравнивать не с чем.</div>
+  </section>
+
   <section class="card">
     <h2>${catCurious(24)} Город для погоды</h2>
     <label class="field">
