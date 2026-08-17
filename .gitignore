@@ -1,0 +1,22 @@
+# ── Медицинские данные: в репозиторий не попадают никогда ──────────────
+# Дневник, выгрузки Мигребота, локальная база и всё, что из них собрано.
+private-data/
+tests/fixtures/*.json
+*.xlsx
+*.xls
+data/
+reference/__pycache__/
+
+# ── Сборка и зависимости ──────────────────────────────────────────────
+node_modules/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+*.apk
+*.aab
+.DS_Store

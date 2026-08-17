@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ясная голова</string>
+    <string name="title_activity_main">Ясная голова</string>
+    <string name="package_name">ru.yasnayagolova.app</string>
+    <string name="custom_url_scheme">ru.yasnayagolova.app</string>
+</resources>

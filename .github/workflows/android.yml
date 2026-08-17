@@ -1,0 +1,48 @@
+# Сборка APK в облаке: на раннере GitHub уже стоят JDK и Android SDK,
+# поэтому локально ставить 3 ГБ инструментов не нужно.
+# Готовый файл появляется во вкладке Actions → нужный запуск → Artifacts.
+name: APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # кнопка «Run workflow» — собрать вручную
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Тесты движка
+        run: |
+          node tests/stats.test.mjs
+          node tests/import.test.mjs
+          node tests/engine.test.mjs
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Установить зависимости Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Положить веб-приложение внутрь APK
+        run: npx cap sync android
+
+      - name: Собрать APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yasnaya-golova-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

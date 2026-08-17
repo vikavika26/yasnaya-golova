@@ -1,0 +1,11 @@
+{
+  "appId": "ru.yasnayagolova.app",
+  "appName": "Ясная голова",
+  "webDir": "pwa",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
