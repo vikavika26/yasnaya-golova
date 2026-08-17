@@ -426,7 +426,7 @@ export function renderDoctor({ analysis, risk }) {
 
 /* ─────────────────────────── Настройки ─────────────────────────── */
 
-export function renderSettings(settings, stats) {
+export function renderSettings(settings, stats, canRemind = false) {
   const theme = settings.theme || 'auto';
   return `
   <section class="card">
@@ -441,6 +441,7 @@ export function renderSettings(settings, stats) {
       при мигрени часто светобоязнь, и обычный экран в приступе смотреть больно.</div>
   </section>
 
+  ${canRemind ? `
   <section class="card">
     <h2>${catAchy(24)} Напоминание</h2>
     <div class="switch-row">
@@ -461,7 +462,7 @@ export function renderSettings(settings, stats) {
     </label>
     <div class="note" id="reminder-status">Спокойные дни тоже важны — без них
       сравнивать не с чем.</div>
-  </section>
+  </section>` : ''}
 
   <section class="card">
     <h2>${catCurious(24)} Город для погоды</h2>

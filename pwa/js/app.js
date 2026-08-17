@@ -77,7 +77,7 @@ function render() {
     view.innerHTML = ui.renderDoctor({ analysis: state.analysis, risk: state.risk });
     bindDoctor();
   } else if (state.screen === 'settings') {
-    view.innerHTML = ui.renderSettings(state.settings, state.stats);
+    view.innerHTML = ui.renderSettings(state.settings, state.stats, notify.isNative());
     bindSettings();
   }
 }
