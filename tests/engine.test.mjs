@@ -56,9 +56,10 @@ ok(mensDay.verdict === 'confirmed', 'день менструации призн�
 ok(mensDay.bootstrap && mensDay.bootstrap.lo > 1, 'он выжил и после блочного бутстрапа',
   mensDay.bootstrap ? `CI [${mensDay.bootstrap.lo.toFixed(2)}; ${mensDay.bootstrap.hi.toFixed(2)}]` : '');
 
-// эталон: падение давления не подтверждается (RR ≈ 0.97 при лаге 0)
+// эталон: падение давления не подтверждается
 const drop = a.factors.find((f) => f.key === 'p_drop_l0');
-ok(Math.abs(drop.rr - 0.938) < 0.01, 'давление: RR совпал с эталоном', `RR=${drop.rr.toFixed(3)}`);
+// порог теперь в мм рт. ст. (4 мм); эталон Python на тех же данных даёт 0.881
+ok(Math.abs(drop.rr - 0.881) < 0.02, 'давление: RR совпал с эталоном', `RR=${drop.rr.toFixed(3)}`);
 ok(drop.verdict === 'not_confirmed', 'падение давления честно не подтверждено');
 
 const weatherConfirmed = a.factors.filter((f) => f.group === 'Погода' && f.verdict === 'confirmed');

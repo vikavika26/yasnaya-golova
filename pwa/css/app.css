@@ -143,14 +143,17 @@ input[type="range"] { width: 100%; accent-color: #E79BB1; height: 28px; }
 
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
-  display: flex; background: rgba(255, 248, 244, .96); backdrop-filter: blur(12px);
-  border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
+  display: flex; gap: 4px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 24px rgba(124, 104, 143, .13);
 }
 .tab {
-  flex: 1; padding: 15px 4px; background: none; border: 0; color: var(--muted);
-  font-size: 13.5px; cursor: pointer; font-family: inherit;
+  flex: 1; height: 52px; border: 0; border-radius: 16px; cursor: pointer;
+  background: none; color: var(--muted); font-family: inherit;
+  font-size: 13.5px; font-weight: 600; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
 }
-.tab.active { color: #6F5FA0; font-weight: 700; }
+.tab.active { color: #5B4C93; background: var(--lav-soft); }
 
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 94px; z-index: 20;
@@ -206,3 +209,75 @@ input[type="range"] { width: 100%; accent-color: #E79BB1; height: 28px; }
 .kv { display: grid; grid-template-columns: 1fr auto; gap: 8px 14px; font-size: 15px; }
 .kv .k { color: var(--ink-soft); }
 .kv div:nth-child(even) { font-weight: 600; text-align: right; }
+
+
+/* ── Добавлено по замечаниям к первой версии ─────────────────────────── */
+
+/* вопрос в форме: подпись и ответы всегда на одной линии */
+.q { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.q .chips { margin: 0; }
+.q-name { font-size: 15.5px; font-weight: 600; margin-bottom: 8px; }
+.q .q-name { margin-bottom: 0; }
+.chips.center { justify-content: center; }
+.chip.flat { background: var(--lav-soft); border-color: transparent; color: #5B4C93; cursor: default; }
+
+/* короткие пояснения вместо простыней */
+.note.center { text-align: center; }
+.note.warn { color: #8A6A22; background: var(--sun-soft); border-radius: 14px; padding: 11px 13px; }
+.nums { font-size: 14px; color: var(--ink); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+/* «Подробнее» — детали не мешают тем, кому они не нужны */
+details.more { margin-top: 12px; }
+details.more > summary {
+  cursor: pointer; font-size: 14px; font-weight: 600; color: #6F5FA0;
+  list-style: none; padding: 10px 0;
+}
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::after { content: ' ↓'; }
+details.more[open] > summary::after { content: ' ↑'; }
+.more-body { border-top: 1px solid var(--line); padding-top: 12px; }
+
+/* строка-подсказка с котиком */
+.hintline {
+  display: flex; gap: 11px; align-items: flex-start; margin-top: 14px;
+  background: var(--sun-soft); border-radius: 16px; padding: 12px 14px;
+  font-size: 14px; color: #8A6A22; line-height: 1.55;
+}
+
+/* карточка отмеченного дня */
+.card.done { border-color: var(--mint); }
+.saved-line {
+  background: var(--mint-soft); color: #3F8E70; border-radius: 14px;
+  padding: 10px 13px; font-size: 14px; font-weight: 600; margin-bottom: 14px;
+}
+
+/* дневник: болело и не болело должны различаться сразу */
+.daylist { display: flex; flex-direction: column; gap: 8px; }
+.day {
+  display: flex; align-items: center; gap: 12px;
+  border-radius: 16px; padding: 11px 13px; border: 1px solid transparent;
+}
+.day.pain { background: var(--rose-soft); border-color: #F4CBD6; }
+.day.calm { background: var(--bg); }
+.day-mark { flex: none; width: 34px; display: flex; justify-content: center; }
+.day .name { font-size: 15px; font-weight: 600; }
+.day.pain .name { color: #A85C74; }
+.day .note { margin-top: 2px; font-size: 13.5px; }
+.score {
+  width: 30px; height: 30px; border-radius: 50%; background: #F09FB4; color: #fff;
+  font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center;
+}
+
+/* график месяцев: две полосы и легенда */
+.legend { display: flex; gap: 16px; font-size: 13px; color: var(--ink-soft); margin-bottom: 12px; }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+.sw.rose { background: var(--rose); }
+.sw.lav { background: var(--lav); }
+.bar-track.pair {
+  height: auto; background: none; display: flex; flex-direction: column; gap: 3px;
+}
+.bar-track.pair .bar-fill { height: 10px; min-width: 2px; background: var(--rose); }
+.bar-track.pair .bar-fill.lav { background: var(--lav); }
+
+button.ghost.danger { color: #C4697F; }

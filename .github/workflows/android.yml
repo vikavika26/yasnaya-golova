@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Тесты движка
+      - name: Тесты
         run: |
           node tests/stats.test.mjs
           node tests/import.test.mjs
@@ -36,6 +36,19 @@ jobs:
       - name: Положить веб-приложение внутрь APK
         run: npx cap sync android
 
+      # Постоянный ключ подписи: без него Android считает каждую сборку другим
+      # приложением и не даёт обновиться поверх старой версии.
+      - name: Разложить ключ подписи из секретов
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/app/keystore.p12
+            echo "ключ подписи разложен"
+          else
+            echo "секрета с ключом нет — соберётся с отладочной подписью"
+          fi
+
       # Проект собирается под compileSdk 36. На раннере обычно есть более старые
       # платформы, поэтому доустанавливаем нужную — иначе Gradle падает
       # с «Failed to find target with hash string android-36».
@@ -47,12 +60,24 @@ jobs:
 
       - name: Собрать APK
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: yasnaya-golova
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Показать, чем подписан APK
+        run: |
+          if [ -f android/app/keystore.p12 ]; then
+            echo "APK подписан постоянным ключом — установится как обновление."
+          else
+            echo "::warning::Секрет ANDROID_KEYSTORE_B64 не задан: подпись отладочная," \
+                 "и установить поверх прошлой версии не получится."
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: yasnaya-golova-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

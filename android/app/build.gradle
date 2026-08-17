@@ -16,10 +16,33 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Постоянный ключ подписи. Отладочный ключ Gradle создаёт заново на каждой
+    // машине, поэтому новая сборка не ставится поверх старой — Android считает её
+    // другим приложением. С этим ключом каждая версия — обычное обновление,
+    // и данные в приложении не теряются.
+    // Файл в репозиторий не попадает: в CI он раскладывается из секретов.
+    def keystoreFile = file(System.getenv('ANDROID_KEYSTORE_PATH') ?: 'keystore.p12')
+    def keystorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD')
+    def hasKeystore = keystoreFile.exists() && keystorePassword?.trim()
+
+    signingConfigs {
+        stable {
+            if (hasKeystore) {
+                storeFile keystoreFile
+                storeType 'PKCS12'
+                storePassword keystorePassword
+                keyAlias System.getenv('ANDROID_KEY_ALIAS') ?: 'yasnaya-golova'
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD') ?: keystorePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // без ключа собираем с отладочной подписью, чтобы сборка не падала
+            signingConfig hasKeystore ? signingConfigs.stable : signingConfigs.debug
         }
     }
 }

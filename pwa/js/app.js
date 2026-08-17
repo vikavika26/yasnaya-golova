@@ -13,7 +13,8 @@ const TITLES = { today: 'Сегодня', triggers: 'Триггеры', diary: '
 const todayIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
   .toISOString().slice(0, 10);
 
-const state = { screen: 'today', days: [], analysis: null, risk: null, stats: null, settings: null };
+const state = { screen: 'today', days: [], analysis: null, risk: null, stats: null,
+  settings: null, savedAt: null };
 let toastTimer = null;
 
 function toast(text, ms = 2600) {
@@ -54,6 +55,7 @@ function render() {
       today: t, risk: state.risk, analysis: state.analysis,
       entry: entry && entry.headache !== null ? entryToForm(entry) : null,
       weather: currentWeather(),
+      savedAt: state.savedAt,
     });
     bindToday();
   } else if (state.screen === 'triggers') {
@@ -73,7 +75,8 @@ function render() {
 function entryToForm(day) {
   return {
     headache: day.headache, intensity: day.intensity, mens: day.mens,
-    med_text: day.medText || '', med_helped: day.medHelped, daily: day.daily || {},
+    med_text: day.medText || '', med_helped: day.medHelped,
+    daily: day.daily || {}, note: day.note || '',
   };
 }
 
@@ -122,6 +125,7 @@ function bindToday() {
     e.preventDefault();
     if (picked.headache === null) return toast('Отметь сначала, болела ли голова');
     const medText = document.getElementById('med_text')?.value.trim() || null;
+    const note = document.getElementById('note')?.value.trim() || null;
     await store.entries.put({
       date: todayIso(),
       headache: picked.headache,
@@ -131,10 +135,14 @@ function bindToday() {
       med_text: medText,
       med_helped: medText ? picked.helped : null,
       daily: picked.daily,
+      note,
       source: 'manual',
     });
+    // видимое подтверждение: карточка меняет заголовок и показывает время записи
+    state.savedAt = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     await recompute();
     render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     toast('Записала, спасибо ✨');
   });
 }

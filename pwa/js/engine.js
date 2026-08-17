@@ -21,6 +21,28 @@ import {
 export const MIN_EXPOSED_HEADACHE = 8;   // меньше — считать нечего, так и скажем
 export const ALPHA = 0.05;
 
+/** Погодные сервисы отдают гектопаскали, но людям привычнее миллиметры. */
+export const HPA_TO_MMHG = 0.7500617;
+
+/**
+ * Что человек может отмечать каждый день. Ключ — в базе, подпись — в интерфейсе.
+ * Как гипотезы такие отметки проверяются только когда их наберётся достаточно:
+ * пока отметок мало, любая выглядит «виноватой» просто из-за привычки замечать плохое.
+ */
+export const DAILY_FACTORS = [
+  { key: 'sleepShort', label: 'мало спала' },
+  { key: 'stress', label: 'нервный день' },
+  { key: 'exercise', label: 'физическая нагрузка' },
+  { key: 'ovulation', label: 'овуляция' },
+  { key: 'alcohol', label: 'алкоголь' },
+  { key: 'coffee', label: 'много кофе' },
+  { key: 'stuffy', label: 'духота' },
+  { key: 'skippedMeal', label: 'пропустила еду' },
+  { key: 'travel', label: 'дорога, поездка' },
+  { key: 'loud', label: 'яркий свет или шум' },
+];
+export const MIN_DAILY_MARKS = 30;
+
 /** Признаки, которые Мигребот собирает только в дни приступа. */
 export const SELF_ONLY_LABELS = [
   'Стресс', 'Мало сна', 'Много сна', 'Физ. нагрузки', 'Умственные нагрузки',
@@ -61,7 +83,12 @@ export function buildDays(entries, weatherMap, { until = null } = {}) {
       medHelped: e.med_helped ?? null,
       selfTriggers: parseTriggers(e.self_triggers),
       daily: e.daily || null,                     // ежедневные отметки нового формата
-      p_mean: w?.p_mean ?? null, p_min: w?.p_min ?? null, p_max: w?.p_max ?? null,
+      note: e.note || null,                       // свой вариант, вписанный руками
+      medText: e.med_text ?? null,
+      // сразу в мм рт. ст., чтобы расчёты и подписи были в одних единицах
+      p_mean: w?.p_mean == null ? null : w.p_mean * HPA_TO_MMHG,
+      p_min: w?.p_min == null ? null : w.p_min * HPA_TO_MMHG,
+      p_max: w?.p_max == null ? null : w.p_max * HPA_TO_MMHG,
       t_mean: w?.t_mean ?? null, rh_mean: w?.rh_mean ?? null,
       wind_max: w?.wind_max ?? null, precip: w?.precip ?? null,
       weatherKind: w?.kind ?? null,
@@ -133,55 +160,50 @@ export function factorDefs(days) {
   add('mens_day', 'День менструации', 'Цикл', (i) => days[i].mens === 1);
 
   [0, 1, 2].forEach((lag) => {
-    add(`p_drop_l${lag}`, `Падение давления ≥5 гПа за сутки${lag ? ` (за ${lag} дн. до)` : ''}`,
-      'Погода', (i) => { const v = at(i, 'p_delta', lag); return v === null ? null : v <= -5; },
-      { lag, hint: 'Проверяется перепад, а не абсолютное давление: реакция бывает на изменение, и с задержкой.' });
+    add(`p_drop_l${lag}`, `Давление упало на 4 мм и больше${lag ? ` (${lag} дн. назад)` : ''}`,
+      'Погода', (i) => { const v = at(i, 'p_delta', lag); return v === null ? null : v <= -4; },
+      { lag, hint: 'Смотрю перепад, а не само давление: реагируют обычно на изменение, иногда с задержкой.' });
   });
-  add('p_drop_strong', 'Резкое падение давления ≥10 гПа за сутки', 'Погода',
-    (i) => { const v = days[i].p_delta; return v === null ? null : v <= -10; });
-  add('p_rise', 'Рост давления ≥5 гПа за сутки', 'Погода',
-    (i) => { const v = days[i].p_delta; return v === null ? null : v >= 5; });
+  add('p_drop_strong', 'Давление резко упало — на 7 мм и больше', 'Погода',
+    (i) => { const v = days[i].p_delta; return v === null ? null : v <= -7; });
+  add('p_rise', 'Давление выросло на 4 мм и больше', 'Погода',
+    (i) => { const v = days[i].p_delta; return v === null ? null : v >= 4; });
   [0, 1].forEach((lag) => {
-    add(`p_swing_l${lag}`, `Скачки давления внутри суток ≥10 гПа${lag ? ` (за ${lag} дн. до)` : ''}`,
-      'Погода', (i) => { const v = at(i, 'p_swing', lag); return v === null ? null : v >= 10; }, { lag });
+    add(`p_swing_l${lag}`, `Давление скакало внутри суток на 7 мм${lag ? ` (${lag} дн. назад)` : ''}`,
+      'Погода', (i) => { const v = at(i, 'p_swing', lag); return v === null ? null : v >= 7; }, { lag });
   });
 
   const pLow = quantile(days.map((d) => d.p_mean), 0.2);
   if (pLow !== null) {
-    add('p_low', 'Низкое давление (пятая часть самых низких дней)', 'Погода',
+    add('p_low', 'Низкое давление — пятая часть самых низких дней', 'Погода',
       (i) => { const v = days[i].p_mean; return v === null ? null : v <= pLow; });
   }
-  add('t_jump', 'Перепад температуры ≥5 °C за сутки', 'Погода',
+  add('t_jump', 'Температура скакнула на 5 °C за сутки', 'Погода',
     (i) => { const v = days[i].t_delta; return v === null ? null : Math.abs(v) >= 5; });
   const rhHigh = quantile(days.map((d) => d.rh_mean), 0.8);
   if (rhHigh !== null) {
-    add('rh_high', 'Высокая влажность (пятая часть самых влажных дней)', 'Погода',
+    add('rh_high', 'Очень влажно — пятая часть самых сырых дней', 'Погода',
       (i) => { const v = days[i].rh_mean; return v === null ? null : v >= rhHigh; });
   }
   const windHigh = quantile(days.map((d) => d.wind_max), 0.8);
   if (windHigh !== null) {
-    add('wind_high', 'Сильный ветер (пятая часть самых ветреных дней)', 'Погода',
+    add('wind_high', 'Сильный ветер — пятая часть самых ветреных дней', 'Погода',
       (i) => { const v = days[i].wind_max; return v === null ? null : v >= windHigh; });
   }
-  add('precip', 'Осадки больше 1 мм', 'Погода',
+  add('precip', 'Дождь или снег', 'Погода',
     (i) => { const v = days[i].precip; return v === null ? null : v >= 1; });
 
   add('weekend', 'Выходной день', 'Режим', (i) => [0, 6].includes(days[i].weekday),
     { hint: 'Мигрень выходного дня: сдвиг режима сна и отмена привычного кофеина.' });
   add('monday', 'Понедельник', 'Режим', (i) => days[i].weekday === 1);
 
-  // ежедневные отметки, если человек начал их вести
-  const dailyKeys = new Map([
-    ['sleepShort', 'Спала меньше обычного'],
-    ['stress', 'Напряжённый день'],
-    ['alcohol', 'Алкоголь'],
-    ['coffee', 'Кофе больше обычного'],
-  ]);
-  for (const [key, label] of dailyKeys) {
+  // ежедневные отметки — только когда их накопилось достаточно
+  for (const { key, label } of DAILY_FACTORS) {
     const marked = days.filter((d) => d.daily && d.daily[key] !== undefined).length;
-    if (marked < 30) continue;                    // ещё рано, отметок мало
+    if (marked < MIN_DAILY_MARKS) continue;
+    const nice = label.charAt(0).toUpperCase() + label.slice(1);
     [0, 1].forEach((lag) => {
-      add(`daily_${key}_l${lag}`, `${label}${lag ? ` (за ${lag} дн. до)` : ''}`, 'Мои отметки',
+      add(`daily_${key}_l${lag}`, `${nice}${lag ? ` (${lag} дн. назад)` : ''}`, 'Мои отметки',
         (i) => { const d = days[i - lag]; return d && d.daily ? !!d.daily[key] : null; }, { lag });
     });
   }
@@ -279,11 +301,16 @@ export function checkBeliefs(days, factors) {
     'Температура': ['t_jump'],
     'Менструация': ['peri', 'mens_day'],
     'Гормоны': ['peri'],
+    'Овуляция': ['daily_ovulation_l0', 'daily_ovulation_l1'],
     'Отголоски вчерашней головной боли': ['prev_day'],
     'Мало сна': ['daily_sleepShort_l0', 'daily_sleepShort_l1'],
     'Стресс': ['daily_stress_l0', 'daily_stress_l1'],
+    'Умственные нагрузки': ['daily_stress_l0', 'daily_stress_l1'],
     'Алкоголь': ['daily_alcohol_l0', 'daily_alcohol_l1'],
     'Кофе': ['daily_coffee_l0', 'daily_coffee_l1'],
+    'Физ. нагрузки': ['daily_exercise_l0', 'daily_exercise_l1'],
+    'Духота': ['daily_stuffy_l0', 'daily_stuffy_l1'],
+    'Голод': ['daily_skippedMeal_l0', 'daily_skippedMeal_l1'],
   };
   const byKey = new Map(factors.map((f) => [f.key, f]));
 
@@ -315,6 +342,17 @@ export function checkBeliefs(days, factors) {
 }
 
 /**
+ * То, что человек называл причиной, но проверить нечем. Отдельно от основного
+ * списка: показывать десять строк «пока не умею проверять» бессмысленно —
+ * достаточно одной подсказки, что начать отмечать.
+ */
+export function unmeasurableBeliefs(beliefs) {
+  return beliefs
+    .filter((b) => b.status === 'needs_daily' || b.status === 'not_measurable')
+    .sort((a, b) => b.namedTimes - a.namedTimes);
+}
+
+/**
  * Профиль лага: как меняется риск в зависимости от сдвига.
  * Форма кривой отличает провокатора от предвестника: то, что «срабатывает»
  * только в сам день боли, скорее часть приступа, а не его причина.
@@ -330,10 +368,10 @@ export function lagProfiles(days, keys = ['p_drop', 'p_swing']) {
     return { lag, rr: res ? res.rr : null, lo: res?.lo ?? null, hi: res?.hi ?? null, n: res?.exposedDays ?? 0 };
   });
   if (keys.includes('p_drop')) {
-    out.p_drop = { label: 'Падение давления ≥5 гПа', points: profile((d) => (d.p_delta === null ? null : d.p_delta <= -5)) };
+    out.p_drop = { label: 'Давление упало на 4 мм и больше', points: profile((d) => (d.p_delta === null ? null : d.p_delta <= -4)) };
   }
   if (keys.includes('p_swing')) {
-    out.p_swing = { label: 'Скачки давления внутри суток ≥10 гПа', points: profile((d) => (d.p_swing === null ? null : d.p_swing >= 10)) };
+    out.p_swing = { label: 'Давление скакало внутри суток на 7 мм', points: profile((d) => (d.p_swing === null ? null : d.p_swing >= 7)) };
   }
   return out;
 }
