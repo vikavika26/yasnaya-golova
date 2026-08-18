@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ярлык по долгому нажатию на иконку: отметить день, не открывая приложение
+     руками. Полноценный виджет требует нативного кода, это первый шаг к нему. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="mark_day"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_mark_short"
+        android:shortcutLongLabel="@string/shortcut_mark_long">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="ru.yasnayagolova.app"
+            android:targetClass="ru.yasnayagolova.app.MainActivity" />
+    </shortcut>
+</shortcuts>

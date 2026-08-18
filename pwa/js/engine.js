@@ -458,3 +458,56 @@ export function riskModel(days, analysis, { trainShare = 0.7 } = {}) {
     forecast,
   };
 }
+
+
+/**
+ * Итоги за последние 12 месяцев в сравнении с предыдущими 12.
+ * Нужен один экран, который не стыдно показать и врачу, и себе в декабре.
+ */
+export function yearSummary(days) {
+  const known = days.filter((d) => d.headache !== null);
+  if (known.length < 60) return null;
+  const last = known[known.length - 1].date;
+  const shift = (iso, months) => {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCMonth(d.getUTCMonth() + months);
+    return d.toISOString().slice(0, 10);
+  };
+  const from1 = shift(last, -12), from2 = shift(last, -24);
+
+  const slice = (a, b) => known.filter((d) => d.date > a && d.date <= b);
+  const stat = (rows) => {
+    const pain = rows.filter((d) => d.headache === 1);
+    const withInt = pain.filter((d) => d.intensity);
+    const byMonth = new Map();
+    pain.forEach((d) => {
+      const m = d.date.slice(0, 7);
+      byMonth.set(m, (byMonth.get(m) || 0) + 1);
+    });
+    const worst = [...byMonth.entries()].sort((a, b) => b[1] - a[1])[0] || null;
+    return {
+      days: rows.length,
+      headacheDays: pain.length,
+      share: rows.length ? pain.length / rows.length : 0,
+      medDays: rows.filter((d) => d.medTaken).length,
+      avgIntensity: withInt.length
+        ? withInt.reduce((sum, d) => sum + d.intensity, 0) / withInt.length : null,
+      worstMonth: worst ? { month: worst[0], days: worst[1] } : null,
+      longestCalm: longestCalmStreak(rows),
+    };
+  };
+
+  const thisYear = stat(slice(from1, last));
+  const prevRows = slice(from2, from1);
+  const prevYear = prevRows.length >= 120 ? stat(prevRows) : null;   // мало данных — не сравниваем
+  return { from: from1, to: last, thisYear, prevYear };
+}
+
+/** Самая длинная череда дней без боли — приятная метрика, её хочется улучшать. */
+function longestCalmStreak(rows) {
+  let best = 0, cur = 0;
+  rows.forEach((d) => {
+    if (d.headache === 0) { cur++; best = Math.max(best, cur); } else cur = 0;
+  });
+  return best;
+}

@@ -4,4 +4,6 @@
     <string name="title_activity_main">Ясная голова</string>
     <string name="package_name">ru.yasnayagolova.app</string>
     <string name="custom_url_scheme">ru.yasnayagolova.app</string>
+    <string name="shortcut_mark_short">Отметить день</string>
+    <string name="shortcut_mark_long">Отметить, как прошёл день</string>
 </resources>

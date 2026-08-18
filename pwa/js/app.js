@@ -1,8 +1,10 @@
 /** Сборка приложения: состояние, переключение экранов, обработчики. */
 import * as store from './store.js';
 import * as weatherApi from './weather.js';
-import { buildDays, analyze, riskModel } from './engine.js';
+import { buildDays, analyze, riskModel, yearSummary } from './engine.js';
 import { importMigrebotFile } from './import.js';
+import { importCsvFile } from './csv.js';
+import { buildReportHtml } from './report.js';
 import * as ui from './ui.js';
 import * as notify from './notify.js';
 
@@ -15,7 +17,7 @@ const todayIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60
   .toISOString().slice(0, 10);
 
 const state = { screen: 'today', days: [], analysis: null, risk: null, stats: null,
-  settings: null, savedAt: null };
+  settings: null, savedAt: null, year: null, onbStep: 0 };
 
 /** Тема применяется к <html>, чтобы переменные цвета подхватились сразу. */
 function applyTheme(choice) {
@@ -44,6 +46,7 @@ async function recompute() {
   state.days = buildDays(entries, wMap, { until: todayIso() });
   state.analysis = analyze(state.days);
   state.risk = riskModel(state.days, state.analysis);
+  state.year = yearSummary(state.days);
 }
 
 function currentWeather() {
@@ -53,6 +56,14 @@ function currentWeather() {
 }
 
 function render() {
+  if (state.screen === 'onboarding') {
+    title.textContent = 'Ясная голова';
+    view.innerHTML = ui.renderOnboarding(state.onbStep, state.settings || {});
+    bindOnboarding();
+    document.querySelector('.tabs').hidden = true;
+    return;
+  }
+  document.querySelector('.tabs').hidden = false;
   title.textContent = TITLES[state.screen];
   document.querySelectorAll('.tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.screen === state.screen);
@@ -74,7 +85,7 @@ function render() {
     view.innerHTML = ui.renderDiary({ days: state.days, stats: state.stats });
     bindDiary();
   } else if (state.screen === 'doctor') {
-    view.innerHTML = ui.renderDoctor({ analysis: state.analysis, risk: state.risk });
+    view.innerHTML = ui.renderDoctor({ analysis: state.analysis, risk: state.risk, year: state.year });
     bindDoctor();
   } else if (state.screen === 'settings') {
     view.innerHTML = ui.renderSettings(state.settings, state.stats, notify.isNative());
@@ -159,7 +170,65 @@ function bindToday() {
 
 /* ─── Дневник ─── */
 
+function bindOnboarding() {
+  document.querySelectorAll('[data-onb]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const act = btn.dataset.onb;
+      if (act === 'next') { state.onbStep += 1; render(); return; }
+      await store.setSetting('onboarded', true);
+      state.settings = await store.allSettings();
+      state.screen = act === 'import' ? 'diary' : 'today';
+      render();
+      if (act !== 'import') syncWeather({ force: true }).then(async () => { await recompute(); render(); });
+    });
+  });
+  document.getElementById('onb-find')?.addEventListener('click', async () => {
+    const name = document.getElementById('onb-city').value.trim();
+    if (!name) return;
+    try {
+      const list = await weatherApi.findCity(name);
+      const box = document.getElementById('onb-city-results');
+      box.innerHTML = list.map((c, i) => `
+        <div class="row"><div class="main"><div class="name">${c.name}</div>
+        <div class="note">${[c.admin, c.country].filter(Boolean).join(', ')}</div></div>
+        <button class="chip" data-city="${i}">выбрать</button></div>`).join('')
+        || '<div class="note">Ничего не нашлось</div>';
+      box.querySelectorAll('[data-city]').forEach((b) => {
+        b.addEventListener('click', async () => {
+          const c = list[+b.dataset.city];
+          await store.setSetting('city', c.name);
+          await store.setSetting('lat', c.lat);
+          await store.setSetting('lon', c.lon);
+          await store.setSetting('tz', c.tz);
+          state.settings = await store.allSettings();
+          toast(`Город: ${c.name}`);
+          state.onbStep = 2;
+          render();
+        });
+      });
+    } catch (err) { toast(err.message); }
+  });
+}
+
 function bindDiary() {
+  document.getElementById('file-csv')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    toast('Читаю файл…', 8000);
+    try {
+      const res = await importCsvFile(file);
+      await syncWeather();
+      await recompute();
+      render();
+      toast(res.attacksOnly
+        ? `Перенесла ${res.imported} приступов. В файле нет спокойных дней — отмечай их здесь,`
+          + ' иначе сравнивать будет не с чем'
+        : `Перенесла ${res.imported} дней`, 6000);
+    } catch (err) {
+      toast(`Не получилось: ${err.message}`, 5000);
+    }
+  });
+
   document.getElementById('file-migrebot')?.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -185,6 +254,24 @@ function bindDoctor() {
     else { navigator.clipboard?.writeText(text); toast('Сводка скопирована — можно вставить куда угодно'); }
   });
   document.getElementById('btn-export')?.addEventListener('click', exportBackup);
+
+  document.getElementById('btn-print-report')?.addEventListener('click', async () => {
+    const html = buildReportHtml({
+      analysis: state.analysis, risk: state.risk, year: state.year,
+      city: state.settings?.city,
+    });
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (!win) {                       // всплывающие окна закрыты — отдаём файлом
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `отчёт-для-врача-${todayIso()}.html`;
+      link.click();
+      toast('Отчёт сохранён файлом — открой его и распечатай', 5000);
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  });
 }
 
 function buildReport() {
@@ -341,6 +428,7 @@ document.getElementById('btn-settings').addEventListener('click', () => {
 
 (async function boot() {
   await recompute();
+  if (!state.settings?.onboarded && !state.stats?.entries) state.screen = 'onboarding';
   applyTheme(state.settings?.theme || 'auto');
   window.matchMedia?.('(prefers-color-scheme: dark)')
     .addEventListener?.('change', () => applyTheme(state.settings?.theme || 'auto'));

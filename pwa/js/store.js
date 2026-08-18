@@ -33,6 +33,7 @@ export const DEFAULTS = {
   theme: 'auto',
   reminderOn: false,
   reminderTime: '21:00',
+  onboarded: false,
   // Что человек отмечает каждый день по своей воле. Без ежедневных отметок
   // фактор нельзя проверить — см. пояснение в engine.js.
   dailyFactors: ['sleepShort', 'stress', 'alcohol', 'coffee'],

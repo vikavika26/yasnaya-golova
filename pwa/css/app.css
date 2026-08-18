@@ -401,3 +401,18 @@ input[type="time"] {
   padding: 12px 14px; border-radius: 14px; background: var(--bg); color: var(--ink);
   border: 1.5px solid var(--line); font-size: 15.5px; font-family: inherit;
 }
+
+
+/* ── Итоги года и первый запуск ──────────────────────────────────────── */
+.card.year { background: linear-gradient(160deg, var(--mint-soft) 0%, var(--card) 60%); }
+.year-big { font-size: 46px; font-weight: 800; line-height: 1.05; letter-spacing: -.03em; }
+.year-cap { color: var(--ink-soft); font-size: 14.5px; margin: 4px 0 14px; }
+
+.onb { text-align: center; padding: 26px 20px 22px; }
+.onb .cat { margin: 0 auto 12px; display: block; }
+.onb h3 { font-size: 21px; margin: 0 0 10px; }
+.onb .note { text-align: left; }
+.onb .field { margin-top: 14px; }
+.dots { display: flex; gap: 7px; justify-content: center; margin: 18px 0 14px; }
+.dots .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.dots .dot.on { background: var(--lav); width: 20px; border-radius: 4px; }

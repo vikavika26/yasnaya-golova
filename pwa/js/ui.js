@@ -321,8 +321,16 @@ export function renderDiary({ days, stats }) {
         Перенести из Мигребота
       </button>
     </label>
-    <div class="note">Нажми в боте «Скачать дневник» и выбери файл. Повторный перенос
-      просто обновит те же дни.</div>
+    <label class="filebtn">
+      <input type="file" id="file-csv" accept=".csv,.txt">
+      <button type="button" class="ghost"
+              onclick="this.parentNode.querySelector('input').click()">
+        Перенести из другого дневника (CSV)
+      </button>
+    </label>
+    <div class="note">Мигребот — кнопка «Скачать дневник». Из Migraine Buddy и других
+      приложений подойдёт выгрузка CSV: столбцы распознаю сама. Переносить можно
+      сколько угодно раз, дни с одинаковой датой обновятся.</div>
   </section>
 
   <section class="card">
@@ -351,9 +359,41 @@ export function renderDiary({ days, stats }) {
   </section>`;
 }
 
+/* ─────────────────────── Итоги года ─────────────────────── */
+
+/** Одна карточка-итог: её не стыдно показать врачу и приятно посмотреть самой. */
+export function renderYear(year) {
+  if (!year) return '';
+  const y = year.thisYear, p = year.prevYear;
+  const diff = p ? y.headacheDays - p.headacheDays : null;
+  const trend = diff === null ? null
+    : diff < 0 ? `на ${Math.abs(diff)} ${plural(Math.abs(diff), 'день', 'дня', 'дней')} меньше, чем годом раньше`
+    : diff > 0 ? `на ${diff} ${plural(diff, 'день', 'дня', 'дней')} больше, чем годом раньше`
+    : 'столько же, сколько годом раньше';
+
+  return `
+  <section class="card year">
+    <h2>${diff !== null && diff < 0 ? catCalm(24) : catCurious(24)} Итоги года</h2>
+    <div class="year-big">${y.headacheDays}</div>
+    <div class="year-cap">${plural(y.headacheDays, 'день', 'дня', 'дней')} с болью
+      за 12 месяцев${trend ? ` · ${trend}` : ''}</div>
+    <div class="kv">
+      <div class="k">Доля дней с болью</div><div>${pct(y.share)}</div>
+      <div class="k">Дней с таблеткой</div><div>${y.medDays}</div>
+      ${y.avgIntensity ? `<div class="k">Средняя сила</div><div>${fix(y.avgIntensity, 1)} из 10</div>` : ''}
+      ${y.worstMonth ? `<div class="k">Самый тяжёлый месяц</div>
+        <div>${esc(y.worstMonth.month)} · ${y.worstMonth.days}</div>` : ''}
+      <div class="k">Самая долгая передышка</div><div>${y.longestCalm}
+        ${plural(y.longestCalm, 'день', 'дня', 'дней')} подряд</div>
+    </div>
+    ${!p ? `<div class="note">Сравнить с прошлым годом пока не с чем — нужен ещё один
+      полный год записей.</div>` : ''}
+  </section>`;
+}
+
 /* ─────────────────────────── Врачу ─────────────────────────── */
 
-export function renderDoctor({ analysis, risk }) {
+export function renderDoctor({ analysis, risk, year }) {
   if (!analysis) {
     return `<section class="card"><div class="empty">${catSleepy(88)}
       <div class="t">Сводку собрать не из чего</div>
@@ -366,6 +406,7 @@ export function renderDoctor({ analysis, risk }) {
   const perMonth = (analysis.headacheDays / Math.max(1, m.months.length)).toFixed(1);
 
   return `
+  ${renderYear(year)}
   <section class="card">
     <h2>${catCurious(24)} Коротко для приёма</h2>
     <div class="kv">
@@ -419,8 +460,11 @@ export function renderDoctor({ analysis, risk }) {
   </section>
 
   <section class="card">
-    <button type="button" class="primary" id="btn-report">Сводка текстом для врача</button>
+    <button type="button" class="primary" id="btn-print-report">Отчёт для врача — печать или PDF</button>
+    <button type="button" class="ghost" id="btn-report">Сводка текстом</button>
     <button type="button" class="ghost" id="btn-export">Сохранить копию данных</button>
+    <div class="note">Отчёт открывается отдельной страницей: оттуда можно распечатать
+      или сохранить в PDF через системный диалог печати.</div>
   </section>`;
 }
 
@@ -491,4 +535,57 @@ export function renderSettings(settings, stats, canRemind = false) {
     <div class="note">Записи только в этом телефоне: ни аккаунта, ни сервера. Меняешь
       телефон — сделай копию заранее.</div>
   </section>`;
+}
+
+
+/* ─────────────────────── Первый запуск ─────────────────────── */
+
+/**
+ * Три экрана вместо пустого приложения. Третий — не украшение: если человек не
+ * поймёт, зачем отмечать спокойные дни, статистики не получится в принципе.
+ */
+export function renderOnboarding(step, settings) {
+  const dots = [0, 1, 2].map((i) => `<i class="dot ${i === step ? 'on' : ''}"></i>`).join('');
+  if (step === 0) {
+    return `
+    <section class="card onb">
+      ${catCalm(110)}
+      <h3>Привет! Я помогу разобраться, отчего болит голова</h3>
+      <div class="note">Не просто записывать дни, а искать закономерности: сравнивать
+        дни с болью и без, подтягивать настоящую погоду и честно говорить, когда
+        данных не хватает.</div>
+      <div class="dots">${dots}</div>
+      <button type="button" class="primary" data-onb="next">Дальше</button>
+    </section>`;
+  }
+  if (step === 1) {
+    return `
+    <section class="card onb">
+      ${catCurious(100)}
+      <h3>В каком ты городе?</h3>
+      <div class="note">Нужно, чтобы сама подтягивала давление и погоду — их не придётся
+        вводить руками.</div>
+      <label class="field" style="margin-top:14px">
+        <input type="text" id="onb-city" value="${esc(settings.city || '')}"
+               placeholder="Санкт-Петербург">
+      </label>
+      <div id="onb-city-results"></div>
+      <button type="button" class="ghost" id="onb-find">Найти город</button>
+      <div class="dots">${dots}</div>
+      <button type="button" class="primary" data-onb="next">Дальше</button>
+    </section>`;
+  }
+  return `
+    <section class="card onb">
+      ${catAchy(100)}
+      <h3>Отмечай и спокойные дни</h3>
+      <div class="note">Это главное. Если отмечать только плохие дни, любая привычка
+        покажется виноватой — сравнивать будет не с чем. Одна отметка в день, даже когда
+        всё хорошо, и через месяц я смогу что-то сказать.</div>
+      <div class="note">Если у тебя уже есть дневник в Мигреботе или другом приложении —
+        перенеси его, и выводы появятся сразу.</div>
+      <div class="dots">${dots}</div>
+      <button type="button" class="primary" data-onb="done">Начать</button>
+      <button type="button" class="ghost" data-onb="import">У меня есть дневник — перенести</button>
+    </section>`;
 }
